@@ -1,48 +1,66 @@
-from tkinter import Entry, Checkbutton, StringVar,  IntVar, INSERT, END
+from tkinter import Entry, Checkbutton, StringVar,  IntVar
 
 
 class ValidatedEntry(Entry):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config(validate="all", validatecommand=(self.register(self.validate), "%P"))
+        self.bind("<KeyRelease>", self.guess)
+        self.bind("<Return>", self.accept)
+        self.bind("<FocusIn>", self.highlight)
+        self.bind("<FocusOut>", self.unhighlight)
+        self.bind("<BackSpace>", self.backspace)
+
+    def backspace(self, event):
+        self.selection_range(self.index("insert") - 1, "end")
         
     def validate(self, text):
         return True
 
+    def guess(self, text):
+        return True
+
+    def unhighlight(self, event):
+        self.icursor(0)
+        self.selection_range(0, 0)
+
+    def accept(self, event):
+        event.widget.tk_focusNext().focus()
+
+    def highlight(self, event):
+        self.selection_range(0, "end")
+
 
 class FloatEntry(ValidatedEntry):
     def validate(self, text):
-        if (
+        return (
             all(char in "0123456789.-" for char in text) and  # all characters are valid
             "-" not in text[1:] and  # "-" is the first character or not present
             text.count(".") <= 1  # only 0 or 1 periods
-        ):
-            return True
-        else:
-            return False
+        )
 
     def get(self):
-        f = super().get()
-        if f == "":
-            return 0
-        else:
-            return float(f)
+        return float(super().get() or 0)
 
 
 class PositiveFloatEntry(FloatEntry):
     def validate(self, text):
-        if super().validate(text) and "-" not in text:
-            return True
-        else:
-            return False
+        return super().validate(text) and "-" not in text
+
+
+class DollarEntry(FloatEntry):
+    def validate(self, text):
+        return super().validate(text) and ("." not in text or len(text[text.index(".")+1:]) <= 2)
+
+
+class PositiveDollarEntry(PositiveFloatEntry, DollarEntry):
+    def validate(self, text):
+        return super().validate(text)
 
 
 class IntEntry(FloatEntry):
     def validate(self, text):
-        if super().validate(text) and "." not in text:
-            return True
-        else:
-            return False
+        return super().validate(text) and "." not in text
             
     def get(self):
         return int(super().get())
@@ -50,10 +68,7 @@ class IntEntry(FloatEntry):
 
 class PositiveIntEntry(IntEntry):
     def validate(self, text):
-        if super().validate(text) and "-" not in text:
-            return True
-        else:
-            return False
+        return super().validate(text) and "-" not in text
 
 
 class AutoCompleteEntry(ValidatedEntry):
@@ -62,31 +77,18 @@ class AutoCompleteEntry(ValidatedEntry):
         self.items = items
         self.text = StringVar(frame)
         self.configure(textvariable=self.text)
-        self.bind("<FocusIn>", self.deselect)
-        self.bind("<FocusOut>", self.deselect)
-        self.bind("<Return>", self.accept)
-        self.bind("<BackSpace>", self.backspace)
-        self.bind("<KeyRelease>", self.guess)
-
-    def deselect(self, event):
-        self.selection_range(0, 0)
-
-    def accept(self, event):
-        self.icursor(0)
-        self.selection_range(0, END)
-        event.widget.tk_focusNext().focus()
-
-    def backspace(self, event):
-        self.selection_range(self.index(INSERT) - 1, END)
 
     def guess(self, event):
-        input_text = self.get().lower()[:self.index(INSERT)]
-        if input_text:
-            for item in self.items:
-                if item.lower().startswith(input_text):
-                    self.text.set(item)
-                    self.selection_range(len(input_text), len(item))
-                    return
+        input_text = self.get().lower()[:self.index("insert")]
+        if not input_text or input_text in [item.lower() for item in self.items]:
+            self.selection_range(0, "end")
+            return
+
+        for item in self.items:
+            if item.lower().startswith(input_text):
+                self.text.set(item)
+                self.selection_range(len(input_text), "end")
+                return
 
 
 class StrictAutoCompleteEntry(AutoCompleteEntry):
@@ -99,7 +101,6 @@ class StrictAutoCompleteEntry(AutoCompleteEntry):
                     return True
             return False
 
-
 def frame():
     def destroy():
         print(ve.get(), fe.get(), pfe.get(), ie.get(), pie.get(), ace.get(), sace.get(), cb.get())
@@ -109,30 +110,58 @@ def frame():
     stores = ["Trader Joes", "Target", "Trade Goods", "Tarps R Us"]
     frame = Toplevel()
     frame.geometry("400x400")
-    Label(frame, text="Validated Entry").grid(row=0, column=0)
+    row = 0
+
+    Label(frame, text="Validated Entry").grid(row=row, column=0)
     ve = ValidatedEntry(frame)
-    ve.grid(row=0, column=1)
-    Label(frame, text="Float Entry").grid(row=1, column=0)
+    ve.grid(row=row, column=1)
+    row += 1
+
+    Label(frame, text="Float Entry").grid(row=row, column=0)
     fe = FloatEntry(frame)
-    fe.grid(row=1, column=1)
-    Label(frame, text="Positive Float Entry").grid(row=2, column=0)
+    fe.grid(row=row, column=1)
+    row += 1
+
+    Label(frame, text="Positive Float Entry").grid(row=row, column=0)
     pfe = PositiveFloatEntry(frame)
-    pfe.grid(row=2, column=1)
-    Label(frame, text="Int Entry").grid(row=3, column=0)
+    pfe.grid(row=row, column=1)
+    row += 1
+
+    Label(frame, text="Dollar Entry").grid(row=row, column=0)
+    ce = DollarEntry(frame)
+    ce.grid(row=row, column=1)
+    row += 1
+
+    Label(frame, text="Positive Dollar Entry").grid(row=row, column=0)
+    ce = PositiveDollarEntry(frame)
+    ce.grid(row=row, column=1)
+    row += 1
+
+    Label(frame, text="Int Entry").grid(row=row, column=0)
     ie = IntEntry(frame)
-    ie.grid(row=3, column=1)
-    Label(frame, text="Positive Int Entry").grid(row=4, column=0)
+    ie.grid(row=row, column=1)
+    row += 1
+
+    Label(frame, text="Positive Int Entry").grid(row=row, column=0)
     pie = PositiveIntEntry(frame)
-    pie.grid(row=4, column=1)
-    Label(frame, text="Auto Completing Entry").grid(row=5, column=0)
+    pie.grid(row=row, column=1)
+    row += 1
+
+    Label(frame, text="Auto Completing Entry").grid(row=row, column=0)
     ace = AutoCompleteEntry(frame, stores)
-    ace.grid(row=5, column=1)
-    Label(frame, text="Strict Auto Completing Entry").grid(row=6, column=0)
+    ace.grid(row=row, column=1)
+    row += 1
+
+    Label(frame, text="Strict Auto Completing Entry").grid(row=row, column=0)
     sace = StrictAutoCompleteEntry(frame, stores)
-    sace.grid(row=6, column=1)
+    sace.grid(row=row, column=1)
+    row += 1
+
     cb = IntVar()
-    Checkbutton(frame, variable=cb).grid(row=7, column=0)
-    Button(frame, text="quit", command=destroy).grid(row=7, column=1)
+    Checkbutton(frame, variable=cb).grid(row=row, column=0)
+    Button(frame, text="quit", command=destroy).grid(row=row, column=1)
+    row += 1
+
     frame.mainloop()
 
 
